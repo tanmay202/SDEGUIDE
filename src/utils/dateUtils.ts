@@ -87,12 +87,17 @@ export function parseKolkataDateToUtcMidnight(dateStr: string): number {
 /**
  * Calculates the Day number (1 to 168) relative to the roadmap start date.
  * If currentDate is before start date, returns 1 as the default launch day.
+ * Start date is configurable (defaults to ROADMAP_START_DATE 2026-10-20).
  */
-export function calculateRoadmapDay(currentDateStr: string = getKolkataDateString()): number {
+export function calculateRoadmapDay(
+  currentDateStr: string = getKolkataDateString(),
+  startDateStr: string = ROADMAP_START_DATE
+): number {
   if (!currentDateStr || !isValidDateString(currentDateStr)) {
     return 1;
   }
-  const startMs = parseKolkataDateToUtcMidnight(ROADMAP_START_DATE);
+  const safeStart = isValidDateString(startDateStr) ? startDateStr : ROADMAP_START_DATE;
+  const startMs = parseKolkataDateToUtcMidnight(safeStart);
   const currentMs = parseKolkataDateToUtcMidnight(currentDateStr);
 
   const diffDays = Math.floor((currentMs - startMs) / (1000 * 60 * 60 * 24));
@@ -134,13 +139,18 @@ export function addDaysKolkata(dateStr: string, days: number): string {
 }
 
 /**
- * Returns number of days remaining until April 20, 2027
+ * Returns number of days remaining until target date.
+ * Target date is configurable (defaults to ROADMAP_TARGET_DATE 2027-04-20).
  */
-export function getDaysRemaining(currentDateStr: string = getKolkataDateString()): number {
+export function getDaysRemaining(
+  currentDateStr: string = getKolkataDateString(),
+  targetDateStr: string = ROADMAP_TARGET_DATE
+): number {
   if (!isValidDateString(currentDateStr)) {
     currentDateStr = ROADMAP_START_DATE;
   }
-  const targetMs = parseKolkataDateToUtcMidnight(ROADMAP_TARGET_DATE);
+  const safeTarget = isValidDateString(targetDateStr) ? targetDateStr : ROADMAP_TARGET_DATE;
+  const targetMs = parseKolkataDateToUtcMidnight(safeTarget);
   const currentMs = parseKolkataDateToUtcMidnight(currentDateStr);
   const diff = Math.ceil((targetMs - currentMs) / (1000 * 60 * 60 * 24));
   return isNaN(diff) ? 0 : Math.max(0, diff);

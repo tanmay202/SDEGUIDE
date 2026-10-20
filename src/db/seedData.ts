@@ -363,6 +363,9 @@ export const INITIAL_USER_SETTINGS: UserSettings = {
   timeZone: 'Asia/Kolkata',
   theme: 'light',
   isSampleDataMode: false,
+  dateDiscrepancyResolution: 'buffer_14_days',
+  dateDiscrepancyNotes:
+    'The curriculum in roadmap.md specifies 24 weeks (168 days) ending April 6, 2027, leaving a 14-day post-curriculum buffer for technical rounds and offer evaluation (Target Date: April 20, 2027).',
 };
 
 /**

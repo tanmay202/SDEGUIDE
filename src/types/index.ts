@@ -163,4 +163,92 @@ export interface UserSettings {
   timeZone: string; // 'Asia/Kolkata'
   theme: 'light' | 'dark' | 'system';
   isSampleDataMode: boolean;
+  dateDiscrepancyResolution?: 'buffer_14_days' | 'align_24_weeks' | 'custom';
+  dateDiscrepancyNotes?: string;
 }
+
+export type RoadmapTaskCategory =
+  | 'dsa'
+  | 'technical'
+  | 'sql'
+  | 'interview'
+  | 'log'
+  | 'backend'
+  | 'devops'
+  | 'project'
+  | 'career'
+  | 'cs_theory'
+  | 'system_design'
+  | 'deliverable';
+
+export interface RoadmapTask {
+  id: string;
+  weekNumber: number;
+  phase: 1 | 2 | 3;
+  dayNumber?: number; // 1 to 14 for detailed Day 1-14 assignments
+  title: string;
+  description?: string;
+  category: RoadmapTaskCategory;
+  source: 'original' | 'generated';
+  isGeneratedPlanning: boolean;
+  problemNumber?: number;
+  problemDifficulty?: DsaDifficulty;
+}
+
+export type MilestoneCategory =
+  | 'python'
+  | 'sql'
+  | 'fastapi'
+  | 'postgresql'
+  | 'testing'
+  | 'deployment'
+  | 'cs_fundamentals'
+  | 'job_search'
+  | 'interview';
+
+export interface RoadmapMilestone {
+  id: string;
+  category: MilestoneCategory;
+  title: string;
+  targetWeek: number;
+  phase: 1 | 2 | 3;
+  description: string;
+  deliverables: string[];
+}
+
+export interface RoadmapWeekTopic {
+  category: string;
+  content: string;
+}
+
+export interface RoadmapWeek {
+  weekNumber: number;
+  weekRange: string; // e.g. "Week 1", "Week 2"
+  blockRange: string; // e.g. "Weeks 1–2", "Weeks 3–4"
+  phase: 1 | 2 | 3;
+  phaseTitle: string;
+  title: string;
+  summary: string;
+  topics: RoadmapWeekTopic[];
+  deliverables: string[];
+  checkpointFocus: string;
+  tasks: RoadmapTask[];
+  dsaProblems?: {
+    title: string;
+    leetcodeNumber?: number;
+    pattern?: string;
+    difficulty?: string;
+  }[];
+}
+
+export interface RoadmapTaskProgress {
+  taskId: string;
+  completed: boolean;
+  completedAt?: string;
+  notes?: string;
+  userEdited?: boolean;
+  customTitle?: string;
+  customDescription?: string;
+}
+
+

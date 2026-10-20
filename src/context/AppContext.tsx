@@ -19,6 +19,7 @@ interface AppContextValue {
   isSampleDataMode: boolean;
   switchToBaseline: () => Promise<void>;
   switchToSampleData: () => Promise<void>;
+  updateSettings: (updates: Partial<UserSettings>) => Promise<void>;
   kolkataDateStr: string;
   kolkataTimeStr: string;
   dayNumber: number;
@@ -140,7 +141,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     resetTimer(block);
   };
 
-  const dayNumber = calculateRoadmapDay(kolkataDateStr);
+  const dayNumber = calculateRoadmapDay(kolkataDateStr, settings?.startDate);
   const weekNumber = calculateRoadmapWeek(dayNumber);
   const phaseNumber = calculateRoadmapPhase(weekNumber);
 
@@ -150,6 +151,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const switchToSampleData = async () => {
     await loadSampleDevelopmentData();
+  };
+
+  const updateSettings = async (updates: Partial<UserSettings>) => {
+    if (settings && settings.id) {
+      await db.settings.update(settings.id, updates);
+    }
   };
 
   const isSampleDataMode = settings?.isSampleDataMode ?? false;
@@ -164,6 +171,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isSampleDataMode,
         switchToBaseline,
         switchToSampleData,
+        updateSettings,
         kolkataDateStr,
         kolkataTimeStr,
         dayNumber,

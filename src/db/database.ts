@@ -9,6 +9,7 @@ import type {
   WeeklyCheckpoint,
   MockInterviewLog,
   UserSettings,
+  RoadmapTaskProgress,
 } from '../types';
 
 export class AppDatabase extends Dexie {
@@ -21,6 +22,7 @@ export class AppDatabase extends Dexie {
   checkpoints!: Table<WeeklyCheckpoint, number>;
   mockInterviews!: Table<MockInterviewLog, number>;
   settings!: Table<UserSettings, number>;
+  roadmapProgress!: Table<RoadmapTaskProgress, string>;
 
   constructor() {
     super('SdePrepDatabase');
@@ -34,6 +36,9 @@ export class AppDatabase extends Dexie {
       checkpoints: '++id, weekNumber, phase, status',
       mockInterviews: '++id, date, type, score',
       settings: '++id, theme, isSampleDataMode',
+    });
+    this.version(2).stores({
+      roadmapProgress: 'taskId, completed, completedAt',
     });
   }
 }

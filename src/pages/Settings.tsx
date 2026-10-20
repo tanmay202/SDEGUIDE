@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Database,
@@ -11,6 +11,10 @@ import {
   Moon,
   User,
   ShieldCheck,
+  Calendar,
+  AlertTriangle,
+  Clock,
+  Save,
 } from 'lucide-react';
 import { db } from '../db/database';
 import {
@@ -20,9 +24,11 @@ import {
 import { useApp } from '../context/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
+import { addDaysKolkata, isValidDateString } from '../utils/dateUtils';
 
 export const Settings: React.FC = () => {
   const {
+    settings,
     theme,
     setTheme,
     kolkataDateStr,
@@ -31,10 +37,24 @@ export const Settings: React.FC = () => {
     isSampleDataMode,
     switchToBaseline,
     switchToSampleData,
+    updateSettings,
   } = useApp();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+
+  // Timeline inputs state
+  const [startDateInput, setStartDateInput] = useState<string>(settings?.startDate || '2026-10-20');
+  const [targetDateInput, setTargetDateInput] = useState<string>(settings?.targetDate || '2027-04-20');
+  const [resolutionChoice, setResolutionChoice] = useState<'buffer_14_days' | 'align_24_weeks' | 'custom'>(
+    settings?.dateDiscrepancyResolution || 'buffer_14_days'
+  );
+
+  useEffect(() => {
+    if (settings?.startDate) setStartDateInput(settings.startDate);
+    if (settings?.targetDate) setTargetDateInput(settings.targetDate);
+    if (settings?.dateDiscrepancyResolution) setResolutionChoice(settings.dateDiscrepancyResolution);
+  }, [settings?.startDate, settings?.targetDate, settings?.dateDiscrepancyResolution]);
 
   // Database Counts
   const dsaCount = useLiveQuery(() => db.dsaProblems.count(), []);
@@ -42,10 +62,48 @@ export const Settings: React.FC = () => {
   const skillsCount = useLiveQuery(() => db.skills.count(), []);
   const jobsCount = useLiveQuery(() => db.jobApplications.count(), []);
   const mocksCount = useLiveQuery(() => db.mockInterviews.count(), []);
+  const roadmapProgressCount = useLiveQuery(() => db.roadmapProgress.count(), []);
 
   const showNotification = (msg: string) => {
     setActionMessage(msg);
-    setTimeout(() => setActionMessage(null), 3000);
+    setTimeout(() => setActionMessage(null), 3500);
+  };
+
+  const handleResolutionChange = (choice: 'buffer_14_days' | 'align_24_weeks' | 'custom') => {
+    setResolutionChoice(choice);
+    if (choice === 'align_24_weeks') {
+      // Exactly 24 weeks (168 days) from start date (day 1 to day 168 -> +167 days)
+      const exact24WeeksEnd = addDaysKolkata(startDateInput, 167);
+      setTargetDateInput(exact24WeeksEnd);
+    } else if (choice === 'buffer_14_days') {
+      // 24 weeks + 14 days buffer = 181 days offset -> 2027-04-20
+      const withBufferEnd = addDaysKolkata(startDateInput, 181);
+      setTargetDateInput(withBufferEnd);
+    }
+  };
+
+  const handleSaveTimeline = async () => {
+    if (!isValidDateString(startDateInput) || !isValidDateString(targetDateInput)) {
+      alert('Please enter valid dates in YYYY-MM-DD format.');
+      return;
+    }
+
+    try {
+      await updateSettings({
+        startDate: startDateInput,
+        targetDate: targetDateInput,
+        dateDiscrepancyResolution: resolutionChoice,
+        dateDiscrepancyNotes:
+          resolutionChoice === 'buffer_14_days'
+            ? 'Preserved 24-week curriculum with 14-day interview scheduling & buffer window (Target: April 20, 2027).'
+            : resolutionChoice === 'align_24_weeks'
+            ? 'Aligned Target Date strictly to 24-week curriculum completion.'
+            : 'Custom user-specified timeline.',
+      });
+      showNotification('Timeline configuration and date discrepancy resolution saved!');
+    } catch (err) {
+      alert('Failed to save settings: ' + err);
+    }
   };
 
   const handleExport = async () => {
@@ -112,7 +170,7 @@ export const Settings: React.FC = () => {
             Application Settings
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Candidate profile, timezone verification, data backups, and sample mode toggling
+            Candidate profile, timeline & date discrepancy resolution, timezone verification, and data backups
           </p>
         </div>
 
@@ -136,7 +194,9 @@ export const Settings: React.FC = () => {
             <div className="grid grid-cols-2 gap-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700">
               <div>
                 <span className="text-slate-400 block text-[11px]">Candidate:</span>
-                <span className="font-semibold text-slate-800 dark:text-slate-200">Tanmay</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {settings?.candidateName || 'Tanmay'}
+                </span>
               </div>
               <div>
                 <span className="text-slate-400 block text-[11px]">Education:</span>
@@ -144,23 +204,31 @@ export const Settings: React.FC = () => {
               </div>
               <div>
                 <span className="text-slate-400 block text-[11px]">Target Role:</span>
-                <span className="font-semibold text-slate-800 dark:text-slate-200">SDE-1 / Python Backend</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {settings?.targetRole || 'SDE-1 / Python Backend'}
+                </span>
               </div>
               <div>
                 <span className="text-slate-400 block text-[11px]">Target CTC:</span>
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400">₹10+ LPA Total</span>
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                  {settings?.targetCtc || '₹10+ LPA Total'}
+                </span>
               </div>
               <div>
                 <span className="text-slate-400 block text-[11px]">Daily Budget:</span>
-                <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">120 Minutes</span>
+                <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
+                  {settings?.dailyBudgetMinutes || 120} Minutes
+                </span>
               </div>
               <div>
                 <span className="text-slate-400 block text-[11px]">Timeline:</span>
-                <span className="font-mono text-slate-800 dark:text-slate-200">Oct 20, '26 → Apr 20, '27</span>
+                <span className="font-mono text-slate-800 dark:text-slate-200">
+                  {startDateInput} → {targetDateInput}
+                </span>
               </div>
             </div>
             <p className="text-[11px] text-slate-400">
-              Locked to match the authoritative preparation contract in `roadmap.md`.
+              Matches the authoritative preparation contract in `roadmap.md`.
             </p>
           </CardContent>
         </Card>
@@ -203,6 +271,157 @@ export const Settings: React.FC = () => {
           </CardContent>
         </Card>
 
+        {/* Timeline & Date Discrepancy Resolution Card (Prompt 1 & Prompt 4 Requirement) */}
+        <Card className="md:col-span-2 border-indigo-200/80 dark:border-indigo-900/50">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-indigo-600" /> Timeline Configuration & Date Discrepancy Resolution
+              </CardTitle>
+              <Badge variant="purple" size="sm">Configurable Schedule</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4 text-xs">
+            {/* Notice Callout */}
+            <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 space-y-2">
+              <div className="flex items-center gap-2 font-semibold">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Date Discrepancy Identified in Prompt 1</span>
+              </div>
+              <p className="text-[11px] leading-relaxed text-amber-800 dark:text-amber-300">
+                The roadmap specifies a <strong>24-week curriculum</strong> (168 days) starting on <code>October 20, 2026</code>.
+                Completing exactly 24 weeks places the curriculum completion on <strong>April 6, 2027</strong>.
+                However, the header states a <strong>Target Date of April 20, 2027</strong> (182 days / 26 weeks from start).
+                Rather than silently altering the curriculum or dates, this <strong>14-day (2-week) discrepancy</strong> is explicitly recorded as a post-curriculum interview buffer for scheduling technical screening rounds, mock interview remediation, and offer evaluations.
+              </p>
+            </div>
+
+            {/* Configurable Start Date & Target Date Inputs */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              <div>
+                <label className="block text-slate-600 dark:text-slate-400 font-medium mb-1.5 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                  Roadmap Start Date (YYYY-MM-DD):
+                </label>
+                <input
+                  type="date"
+                  value={startDateInput}
+                  onChange={(e) => setStartDateInput(e.target.value)}
+                  className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-600 dark:text-slate-400 font-medium mb-1.5 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-slate-500" />
+                  Target Offer Date (YYYY-MM-DD):
+                </label>
+                <input
+                  type="date"
+                  value={targetDateInput}
+                  onChange={(e) => {
+                    setTargetDateInput(e.target.value);
+                    setResolutionChoice('custom');
+                  }}
+                  className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Resolution Strategy Radio Options */}
+            <div>
+              <span className="block text-slate-700 dark:text-slate-300 font-semibold mb-2">
+                Timeline Resolution Strategy:
+              </span>
+              <div className="space-y-2">
+                <label
+                  onClick={() => handleResolutionChange('buffer_14_days')}
+                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    resolutionChoice === 'buffer_14_days'
+                      ? 'bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-800'
+                      : 'bg-slate-50/50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="timeline_resolution"
+                    checked={resolutionChoice === 'buffer_14_days'}
+                    onChange={() => handleResolutionChange('buffer_14_days')}
+                    className="mt-0.5 text-indigo-600"
+                  />
+                  <div>
+                    <span className="font-semibold text-slate-900 dark:text-white block">
+                      Preserve 24-Week Curriculum + 14-Day Post-Curriculum Interview Buffer (Recommended)
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-0.5">
+                      Curriculum ends April 6, 2027 (Day 168). Target offer date remains April 20, 2027 (Day 182) to account for multi-stage interview scheduling and final negotiations.
+                    </span>
+                  </div>
+                </label>
+
+                <label
+                  onClick={() => handleResolutionChange('align_24_weeks')}
+                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    resolutionChoice === 'align_24_weeks'
+                      ? 'bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-800'
+                      : 'bg-slate-50/50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="timeline_resolution"
+                    checked={resolutionChoice === 'align_24_weeks'}
+                    onChange={() => handleResolutionChange('align_24_weeks')}
+                    className="mt-0.5 text-indigo-600"
+                  />
+                  <div>
+                    <span className="font-semibold text-slate-900 dark:text-white block">
+                      Align Target Date Strictly to 24-Week Curriculum (April 6, 2027)
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-0.5">
+                      Adjusts Target Date to exactly match the end of Week 24 (168 days) without post-curriculum buffer.
+                    </span>
+                  </div>
+                </label>
+
+                <label
+                  onClick={() => handleResolutionChange('custom')}
+                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    resolutionChoice === 'custom'
+                      ? 'bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-800'
+                      : 'bg-slate-50/50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="timeline_resolution"
+                    checked={resolutionChoice === 'custom'}
+                    onChange={() => handleResolutionChange('custom')}
+                    className="mt-0.5 text-indigo-600"
+                  />
+                  <div>
+                    <span className="font-semibold text-slate-900 dark:text-white block">
+                      Custom Timeline
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-0.5">
+                      Manually set arbitrary start and target dates above.
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={handleSaveTimeline}
+                className="flex items-center gap-1.5 py-2 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-colors shadow-xs"
+              >
+                <Save className="w-3.5 h-3.5" /> Save Timeline Configuration
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Development Data & Mode Controls */}
         <Card>
           <CardHeader>
@@ -215,7 +434,7 @@ export const Settings: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-3 text-xs">
             <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
-              In accordance with project guidelines, the dashboard defaults to your real, unmanipulated progress (Day 1 baseline). You may toggle sample development data to preview populated charts.
+              In accordance with project guidelines, the dashboard defaults to your real, unmanipulated progress (Day 1 baseline with 0 fake statistics). You may toggle sample development data to preview populated charts.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-2 pt-1">
@@ -243,7 +462,7 @@ export const Settings: React.FC = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-xs">
-            <div className="grid grid-cols-5 gap-1.5 text-center p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700 font-mono text-[11px]">
+            <div className="grid grid-cols-6 gap-1.5 text-center p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700 font-mono text-[11px]">
               <div>
                 <span className="text-slate-400 block text-[9px]">DSA</span>
                 <span className="font-bold text-slate-800 dark:text-slate-200">{dsaCount ?? 0}</span>
@@ -263,6 +482,10 @@ export const Settings: React.FC = () => {
               <div>
                 <span className="text-slate-400 block text-[9px]">Mocks</span>
                 <span className="font-bold text-slate-800 dark:text-slate-200">{mocksCount ?? 0}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[9px]">Roadmap</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">{roadmapProgressCount ?? 0}</span>
               </div>
             </div>
 

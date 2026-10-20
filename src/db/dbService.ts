@@ -16,7 +16,7 @@ import {
   ROADMAP_START_DATE,
   TOTAL_DAYS,
 } from '../utils/dateUtils';
-import type { DailyPlan, DsaStatus, RevisionItem } from '../types';
+import type { DailyPlan, DsaStatus, RevisionItem, RoadmapTaskProgress, UserSettings } from '../types';
 
 export async function initializeDatabase(): Promise<void> {
   const settingsCount = await db.settings.count();
@@ -42,6 +42,7 @@ export async function resetToCleanBaseline(): Promise<void> {
       db.checkpoints,
       db.mockInterviews,
       db.settings,
+      db.roadmapProgress,
     ],
     async () => {
       await db.dsaProblems.clear();
@@ -53,6 +54,7 @@ export async function resetToCleanBaseline(): Promise<void> {
       await db.checkpoints.clear();
       await db.mockInterviews.clear();
       await db.settings.clear();
+      await db.roadmapProgress.clear();
 
       await db.dsaProblems.bulkAdd(MASTER_DSA_PROBLEMS);
       await db.dailyPlans.add(DAY1_PLAN);
@@ -82,6 +84,7 @@ export async function loadSampleDevelopmentData(): Promise<void> {
       db.jobApplications,
       db.mockInterviews,
       db.settings,
+      db.roadmapProgress,
     ],
     async () => {
       // Mark a few problems as solved/mastered for preview
@@ -166,6 +169,23 @@ export async function loadSampleDevelopmentData(): Promise<void> {
         actionPlan: 'Write down constraint bounds before writing any code.',
         problemsCovered: 'Two Sum (LC #1)',
       });
+
+      // Sample roadmap progress: Day 1 first 2 tasks completed
+      await db.roadmapProgress.clear();
+      await db.roadmapProgress.bulkAdd([
+        {
+          taskId: 'w1-d1-dsa-1',
+          completed: true,
+          completedAt: today,
+          notes: 'Completed Big-O diagnostic snippets (all 5 correct).',
+        },
+        {
+          taskId: 'w1-d1-technical-2',
+          completed: true,
+          completedAt: today,
+          notes: 'Completed exercises 1-4 in day1_diagnostic.py.',
+        },
+      ]);
 
       // Update settings
       const currentSetting = await db.settings.toCollection().first();
@@ -566,6 +586,7 @@ export async function exportDatabaseBackup(): Promise<string> {
     checkpoints: await db.checkpoints.toArray(),
     mockInterviews: await db.mockInterviews.toArray(),
     settings: await db.settings.toArray(),
+    roadmapProgress: await db.roadmapProgress.toArray(),
   };
   return JSON.stringify(exportData, null, 2);
 }
@@ -592,6 +613,7 @@ export async function importDatabaseBackup(jsonString: string): Promise<boolean>
         db.checkpoints,
         db.mockInterviews,
         db.settings,
+        db.roadmapProgress,
       ],
       async () => {
         await db.dsaProblems.clear();
@@ -603,6 +625,7 @@ export async function importDatabaseBackup(jsonString: string): Promise<boolean>
         await db.checkpoints.clear();
         await db.mockInterviews.clear();
         await db.settings.clear();
+        await db.roadmapProgress.clear();
 
         if (data.dsaProblems?.length) await db.dsaProblems.bulkAdd(data.dsaProblems);
         if (data.dailyPlans?.length) await db.dailyPlans.bulkAdd(data.dailyPlans);
@@ -613,11 +636,111 @@ export async function importDatabaseBackup(jsonString: string): Promise<boolean>
         if (data.checkpoints?.length) await db.checkpoints.bulkAdd(data.checkpoints);
         if (data.mockInterviews?.length) await db.mockInterviews.bulkAdd(data.mockInterviews);
         if (data.settings?.length) await db.settings.bulkAdd(data.settings);
+        if (data.roadmapProgress?.length) await db.roadmapProgress.bulkAdd(data.roadmapProgress);
       }
     );
     return true;
   } catch (err) {
     console.error('Import failed:', err);
     return false;
+  }
+}
+
+/**
+ * Marks a roadmap task complete or reopens it in the separate progress store.
+ * The roadmap source content itself is never mutated.
+ */
+export async function toggleRoadmapTask(
+  taskId: string,
+  completed: boolean,
+  notes?: string,
+  customTitle?: string,
+  customDescription?: string
+): Promise<void> {
+  const today = getKolkataDateString();
+  const existing = await db.roadmapProgress.get(taskId);
+
+  if (existing) {
+    await db.roadmapProgress.update(taskId, {
+      completed,
+      completedAt: completed ? (existing.completedAt || today) : undefined,
+      notes: notes !== undefined ? notes : existing.notes,
+      customTitle: customTitle !== undefined ? customTitle : existing.customTitle,
+      customDescription: customDescription !== undefined ? customDescription : existing.customDescription,
+      userEdited: true,
+    });
+  } else {
+    await db.roadmapProgress.add({
+      taskId,
+      completed,
+      completedAt: completed ? today : undefined,
+      notes,
+      customTitle,
+      customDescription,
+      userEdited: true,
+    });
+  }
+}
+
+/**
+ * Updates full progress record for a roadmap task or deliverable
+ */
+export async function updateRoadmapTaskProgress(
+  taskId: string,
+  updates: Partial<RoadmapTaskProgress>
+): Promise<void> {
+  const today = getKolkataDateString();
+  const existing = await db.roadmapProgress.get(taskId);
+
+  if (existing) {
+    const isCompleted = updates.completed !== undefined ? updates.completed : existing.completed;
+    await db.roadmapProgress.update(taskId, {
+      ...updates,
+      completed: isCompleted,
+      completedAt: isCompleted ? (existing.completedAt || today) : undefined,
+      userEdited: true,
+    });
+  } else {
+    const isCompleted = updates.completed ?? false;
+    await db.roadmapProgress.add({
+      taskId,
+      completed: isCompleted,
+      completedAt: isCompleted ? today : undefined,
+      notes: updates.notes,
+      customTitle: updates.customTitle,
+      customDescription: updates.customDescription,
+      userEdited: true,
+    });
+  }
+}
+
+/**
+ * Resets a roadmap task back to clean baseline state (removes custom edits and progress)
+ */
+export async function resetRoadmapTaskProgress(taskId: string): Promise<void> {
+  await db.roadmapProgress.delete(taskId);
+}
+
+/**
+ * Returns single roadmap task progress record from IndexedDB
+ */
+export async function getRoadmapTaskProgress(taskId: string): Promise<RoadmapTaskProgress | undefined> {
+  return await db.roadmapProgress.get(taskId);
+}
+
+/**
+ * Returns all roadmap task progress records from IndexedDB
+ */
+export async function getAllRoadmapProgress(): Promise<RoadmapTaskProgress[]> {
+  return await db.roadmapProgress.toArray();
+}
+
+/**
+ * Updates user settings (such as startDate, targetDate, discrepancy resolution)
+ */
+export async function updateUserSettings(updates: Partial<UserSettings>): Promise<void> {
+  const current = await db.settings.toCollection().first();
+  if (current && current.id) {
+    await db.settings.update(current.id, updates);
   }
 }
